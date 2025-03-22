@@ -1,0 +1,8 @@
+../Core/Src/main.c:89:6:KeypadPressingCallback	11
+../Core/Src/main.c:144:6:KeypadPressingTimeoutCallback	2
+../Core/Src/main.c:155:6:handle_state_keyboard	3
+../Core/Src/main.c:179:5:main	1
+../Core/Src/main.c:238:6:SystemClock_Config	3
+../Core/Src/main.c:278:13:MX_I2C1_Init	2
+../Core/Src/main.c:312:13:MX_GPIO_Init	1
+../Core/Src/main.c:351:6:Error_Handler	1
