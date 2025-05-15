@@ -8,10 +8,10 @@ const uint8_t key_code[KEYPAD_ROW][KEYPAD_COL] =
 		{'*','0','#','D'},
 };
 
-static uint8_t key_current;
+uint8_t key_current;
 static uint8_t key_last;
 static uint8_t key_debounce = 0;
-static uint8_t key_test;
+//static uint8_t key_test;
 static uint8_t debounecing = 0;
 static uint32_t t_debounce;
 static uint32_t t_start_press;
@@ -116,12 +116,17 @@ void Keypad_Handle()
 		key_last = key_current;
 	}
 
-	if(is_press && (HAL_GetTick() - t_start_press >= 3000) ) //nhan giu phim
-	{
-		key_test = key_current;
-		KeypadPressingTimeoutCallback(key_current);
-		is_press = 0;
-	}
+//	if(is_press && (HAL_GetTick() - t_start_press >= 3000) ) //nhan giu phim
+//	{
+//		key_test = key_current;
+//		KeypadPressingTimeoutCallback(key_current);
+//		is_press = 0;
+//	}
+    if (is_press)
+    {
+    	HAL_Delay(100);
+        KeypadPressingCallback(key_current);
+    }
 }
 
 void Keypad_Init()

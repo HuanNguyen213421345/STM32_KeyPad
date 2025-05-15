@@ -9,6 +9,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include motor_lib/subdir.mk
 -include Keypad_Lib/subdir.mk
 -include Drivers/STM32F1xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
@@ -62,7 +63,7 @@ main-build: key_pad.elf secondary-outputs
 
 # Tool invocations
 key_pad.elf key_pad.map: $(OBJS) $(USER_OBJS) D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "key_pad.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="key_pad.map" -Wl,--gc-sections -static -L"D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\Keypad_Lib" --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "key_pad.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="key_pad.map" -Wl,--gc-sections -static -L"D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\motor_lib" -L"D:\user\STM32CubeIDE\workspace_1.16.1\key_pad\Keypad_Lib" --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

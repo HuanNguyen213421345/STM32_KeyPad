@@ -1,0 +1,2 @@
+../motor_lib/motor_lib.c:4:6:motor_control	16	static
+../motor_lib/motor_lib.c:23:6:motor_init	24	static

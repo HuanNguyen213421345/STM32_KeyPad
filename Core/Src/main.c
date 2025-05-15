@@ -21,9 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "Keypad.h"
-#include "CLCD_I2C.h"
+//#include "Keypad.h"
 #include "string.h"
+#include "car.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,131 +42,102 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+
+UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-CLCD_I2C_Name LCD1;
+//CLCD_I2C_Name LCD1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
+// w u v x
+
+typedef enum
+{
+	SERVO_1_STATE_UP,
+	SERVO_1_STATE_DOWN,
+}Servo1State;
+
+typedef enum
+{
+	SERVO_2_STATE_UP,
+	SERVO_2_STATE_DOWN,
+}Servo2State;
+
+typedef enum
+{
+	SERVO_3_STATE_UP,
+	SERVO_3_STATE_DOWN,
+}Servo3State;
+
+typedef enum
+{
+	SERVO_4_STATE_UP,
+	SERVO_4_STATE_DOWN,
+}Servo4State;
+
+Servo1State servo_state_1 = SERVO_1_STATE_UP;
+Servo2State servo_state_2 = SERVO_2_STATE_UP;
+Servo3State servo_state_3 = SERVO_3_STATE_UP;
+Servo4State servo_state_4 = SERVO_4_STATE_UP;
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t data_rx;
+uint32_t t_time_1 = 0;
+volatile uint8_t uart_flag = 0;
+extern uint8_t key_current;
 
-//----------------------------XU LY NHAP MAT KHAU-----------------------//
-
-#define PASSWORD_LEN 9
-
-typedef enum
+long map(long x, long in_min, long in_max,long out_min, long out_max)
 {
-	NORMAL_STATE,
-	LOCK_STATE,
-	LOCK_30S_STATE,
-	ENTER_PASS_STATE
-}KeyPassState;
-
-typedef struct
-{
-	uint8_t buff[PASSWORD_LEN];
-	uint8_t index;
-
-}PasswordTypedef;
-
-uint8_t  pass[PASSWORD_LEN] = "01234567\0";
-uint8_t count_err;
-uint8_t set_lcd = 6;
-uint32_t time_start_err;
-KeyPassState keypad_state = LOCK_STATE;
-PasswordTypedef password;
-
-
-void KeypadPressingCallback(uint8_t key)
-{
-	switch(keypad_state)
-	{
-		case NORMAL_STATE:
-
-			break;
-		case LOCK_STATE:
-
-			break;
-		case ENTER_PASS_STATE:
-//			CLCD_I2C_SetCursor(&LCD1,0,0);
-//			LCD_Printf(&LCD1, "ENTER:");
-			if(key >= '0' && key <= '9')
-			{
-				if(password.index < 8)
-				{
-					password.buff[password.index++] = key;
-					CLCD_I2C_SetCursor(&LCD1,set_lcd,0);
-					LCD_Printf(&LCD1,"%d", key - '0');
-					set_lcd++;
-				}
-			}
-			else if(key == 'D')
-			{
-				password.buff[password.index] = '\0';
-				if(strcmp((char *)(password.buff), (char*)pass) == 0)
-				{
-					CLCD_I2C_SetCursor(&LCD1,0,0);
-					LCD_Printf(&LCD1, "PASSWORD CORRECT");
-					keypad_state = NORMAL_STATE;
-				}
-				else
-				{
-					count_err++;
-					if(count_err < 3)
-					{
-						memset(password.buff,0,PASSWORD_LEN);
-						password.index = 0;
-
-					}
-					else
-					{
-						time_start_err = HAL_GetTick();
-						keypad_state = LOCK_30S_STATE;
-					}
-				}
-			}
-			break;
-		default:
-
-			break;
-	}
+	return (x - in_min)*(out_max - out_min)/(in_max - in_min) + out_min;
 }
 
-void KeypadPressingTimeoutCallback(uint8_t key)
+void servo_pwm(TIM_HandleTypeDef *htim, uint32_t channel, int angle)
 {
-	if(key == 'D')
-	{
-		password.index = 0;
-		CLCD_I2C_SetCursor(&LCD1,0,0);
-		LCD_Printf(&LCD1, "ENTER:");
-		keypad_state = ENTER_PASS_STATE;
-	}
+//	uint16_t ARR = __HAL_TIM_GET_AUTORELOAD(htim);
+//	uint16_t CCR = 1000+((float)angle/180)*1000;
+	uint16_t CCR1 = map(angle,0,180,544,2400);
+	__HAL_TIM_SET_COMPARE(htim,channel,CCR1);
 }
 
-void handle_state_keyboard()
+void delay_us(uint32_t us)
 {
-	switch(keypad_state)
-	{
-		case LOCK_30S_STATE:
-		{
-			if(HAL_GetTick() - time_start_err >= 30000)
-			{
-				keypad_state = ENTER_PASS_STATE;
-				memset(password.buff,0,PASSWORD_LEN);
-			}
-		}
-			break;
-		default:
-			break;
+	__HAL_TIM_SetCounter(&htim1,0);
+	HAL_TIM_Base_Start(&htim1);
+	while(__HAL_TIM_GET_COUNTER(&htim1)<us);
+	HAL_TIM_Base_Stop(&htim1);
+}
+
+int angle3 = 70;
+int angle2 = 90;
+int angle1 = 90;
+int angle4 = 90;
+
+void setup_arm()
+{
+	servo_pwm(&htim1, TIM_CHANNEL_1, 90);
+	servo_pwm(&htim1, TIM_CHANNEL_2, 100);
+	servo_pwm(&htim1, TIM_CHANNEL_3, 70);
+	servo_pwm(&htim1, TIM_CHANNEL_4, 90);
+	car_control(CAR_STOP_STATE, 40);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART3){
+		HAL_UART_Receive_IT(huart, &data_rx, 1);
+		uart_flag = 1;
 	}
 }
 
@@ -201,11 +172,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_I2C1_Init();
+  MX_TIM1_Init();
+  MX_TIM2_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  CLCD_I2C_Init(&LCD1,&hi2c1,0x4e,24,4);
-  Keypad_Init();
-  password.index =0;
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  HAL_UART_Receive_IT(&huart3, &data_rx, 1);
+  car_init(&htim2);
+  setup_arm();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -215,19 +193,153 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(uart_flag)
+	  {
+		  switch(data_rx)
+		  {
+			case 'G':
+				 switch(servo_state_1)
+				 {
+					case SERVO_1_STATE_UP:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle1 += 5;
+							if(angle1 >= 180) angle1 = 180;
+							servo_pwm(&htim1, TIM_CHANNEL_1, angle1);
+							t_time_1 = HAL_GetTick();
+						}
+					break;
+					case SERVO_1_STATE_DOWN:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle1 -= 5;
+							if(angle1 >= 180) angle1 = 180;
+							servo_pwm(&htim1, TIM_CHANNEL_1, angle1);
+							t_time_1 = HAL_GetTick();
+						}
+					break;
+				 }
+				break;
+			case 'w':
+				servo_state_1 = SERVO_1_STATE_UP;
+				break;
+			case 'W':
+				servo_state_1 = SERVO_1_STATE_DOWN;
+				break;
+			case 'I':
+				switch(servo_state_2)
+				{
+					case SERVO_2_STATE_UP:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle2 += 5;
+							if(angle2 >= 130) angle2 = 130;
+							servo_pwm(&htim1, TIM_CHANNEL_2, angle2);
+							t_time_1 = HAL_GetTick();
+							}
+						break;
+					case SERVO_2_STATE_DOWN:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle2 -= 5;
+							if(angle2 <= 90) angle2 = 90;
+							servo_pwm(&htim1, TIM_CHANNEL_2, angle2);
+							t_time_1 = HAL_GetTick();
+						}
+						break;
+					}
+				break;
+			case 'u':
+					servo_state_2 = SERVO_2_STATE_UP;
+					break;
+			case 'U':
+					servo_state_2 = SERVO_2_STATE_DOWN;
+					break;
+				break;
+			case 'H':
+				switch(servo_state_3)
+				{
+					case SERVO_3_STATE_UP:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle3 += 5;
+							if(angle3 >= 150) angle3 = 150;
+							servo_pwm(&htim1, TIM_CHANNEL_3, angle3);
+							t_time_1 = HAL_GetTick();
+							}
+						break;
+					case SERVO_3_STATE_DOWN:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle3 -= 5;
+							if(angle3 <= 0) angle3 = 0;
+							servo_pwm(&htim1, TIM_CHANNEL_3, angle3);
+							t_time_1 = HAL_GetTick();
+						}
+						break;
+					}
+				break;
+			case 'v':
+					servo_state_3 = SERVO_3_STATE_UP;
+					break;
+			case 'V':
+					servo_state_3 = SERVO_3_STATE_DOWN;
+					break;
+				break;
+			case 'J':
+				switch(servo_state_4)
+				{
+					case SERVO_4_STATE_UP:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle4 += 5;
+							if(angle4 >= 150) angle4 = 150;
+							servo_pwm(&htim1, TIM_CHANNEL_4, angle4);
+							t_time_1 = HAL_GetTick();
+							}
+						break;
+					case SERVO_4_STATE_DOWN:
+						if(HAL_GetTick() - t_time_1 >= 200)
+						{
+							angle4 -= 5;
+							if(angle4 <= 0) angle4 = 0;
+							servo_pwm(&htim1, TIM_CHANNEL_4, angle4);
+							t_time_1 = HAL_GetTick();
+						}
+						break;
+					}
+				break;
+			case 'x':
+					servo_state_4 = SERVO_4_STATE_UP;
+					break;
+			case 'X':
+					servo_state_4 = SERVO_4_STATE_DOWN;
+					break;
+				break;
+			case 'F':
+				car_control(CAR_FORWARD_STATE, 40);
+				break;
+			case 'B':
+				car_control(CAR_BACKWARD_STATE, 40);
+				break;
+			case 'R':
+				car_control(CAR_LEFT_STATE, 40);
+				break;
+			case 'L':
+				car_control(CAR_RIGHT_STATE, 40);
+				break;
+			case 'S':
+				car_control(CAR_STOP_STATE, 40);
+				break;
+			case '0':
+				setup_arm();
+				break;
+			default:
+				break;
+		}
+		  }
+ }
 
-//	  Keypad_Filter();
-//	  static uint8_t key_last =0;
-//	  if(key_current != key_last)
-//	  {
-//		  dem++;
-//		  key_last = key_current;
-//	  }
-
-	  Keypad_Handle();
-	  handle_state_keyboard();
-
-  }
   /* USER CODE END 3 */
 }
 
@@ -243,13 +355,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -271,36 +382,185 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief TIM1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_TIM1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN TIM1_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END TIM1_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 63;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 19999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
 
-  /* USER CODE END I2C1_Init 2 */
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 63;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief USART3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART3_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART3_Init 0 */
+
+  /* USER CODE END USART3_Init 0 */
+
+  /* USER CODE BEGIN USART3_Init 1 */
+
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 9600;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART3_Init 2 */
+
+  /* USER CODE END USART3_Init 2 */
 
 }
 
@@ -316,12 +576,14 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, pin_motor_1_Pin|pin_motor_2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA0 PA1 PA2 PA3 */
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
@@ -335,6 +597,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : pin_motor_1_Pin pin_motor_2_Pin */
+  GPIO_InitStruct.Pin = pin_motor_1_Pin|pin_motor_2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

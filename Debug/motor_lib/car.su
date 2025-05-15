@@ -1,0 +1,2 @@
+../motor_lib/car.c:8:6:car_control	16	static
+../motor_lib/car.c:37:6:car_init	24	static

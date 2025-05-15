@@ -1,0 +1,2 @@
+../motor_lib/car.c:8:6:car_control	6
+../motor_lib/car.c:37:6:car_init	1
